@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Shadowing Trainer</title>
+<style>
+body { font-family: Arial; background:#f5f7fa; text-align:center; }
+textarea { width:80%; height:100px; margin:10px; font-size:16px; }
+button { padding:10px 20px; margin:10px; font-size:16px; }
+#card { background:white; padding:20px; margin:20px auto; width:70%; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}
+.correct { color:green; }
+.wrong { color:red; font-weight:bold; }
+#target { font-size:22px; margin-bottom:15px; }
+#result { margin-top:10px; font-size:18px; }
+#history { margin-top:20px; text-align:left; max-height:200px; overflow:auto; }
+.log { border-bottom:1px solid #ddd; padding:5px; }
+</style>
+</head>
+
+<body>
+
+<h2>🎧 Shadowing Trainer</h2>
+
+<textarea id="input" placeholder="Paste your English text here"></textarea><br>
+
+<label>Speed: <span id="speedVal">0.8</span></label><br>
+<input type="range" min="0.5" max="1.2" step="0.1" value="0.8" id="speed">
+
+<br>
+<button onclick="start()">Start</button>
+<button onclick="forceNext()">Next ▶</button>
+
+<div id="card">
+  <div id="target">Press Start</div>
+  <div id="result"></div>
+</div>
+
+<div id="history"></div>
+
+<script>
+let chunks=[], index=0;
+let recognition;
+let selectedVoice=null;
+
+// スピード表示
+document.getElementById("speed").oninput = function() {
+  document.getElementById("speedVal").innerText = this.value;
+};
+
+// ★音声初期化（固定化）
+function initVoice(){
+  let voices = speechSynthesis.getVoices();
+  selectedVoice = voices.find(v => 
+    v.name.includes("Google") || v.lang==="en-US"
+  );
+}
+
+// 文分割
+function splitText(text){
+  return text
+    .replace(/\n/g, " ")
+    .replace(/,/g, ".")
+    .split(/(?<=[.!?])/)
+    .filter(s=>s.trim());
+}
+
+// 音声（改善版）
+function speak(text){
+  speechSynthesis.cancel(); // ★完全リセット
+
+  let u=new SpeechSynthesisUtterance();
+  u.lang="en-US";
+
+  if(selectedVoice) u.voice = selectedVoice;
+
+  text = text.replace(/AI/g, "A I");
+  u.text = text;
+
+  u.rate=parseFloat(document.getElementById("speed").value);
+
+  u.onend=()=>startListening();
+
+  speechSynthesis.speak(u);
+}
+
+// 音声認識初期化
+function initRecognition(){
+  recognition = new webkitSpeechRecognition();
+  recognition.lang="en-US";
+  recognition.interimResults=true;
+
+  recognition.onresult = function(e){
+    let interim="", final="";
+
+    for(let i=0;i<e.results.length;i++){
+      if(e.results[i].isFinal){
+        final += e.results[i][0].transcript;
+      } else {
+        interim += e.results[i][0].transcript;
+      }
+    }
+
+    document.getElementById("result").innerHTML =
+      "<b>You:</b> " + interim;
+
+    if(final){
+      document.getElementById("result").innerHTML =
+        "<b>You:</b> " + final;
+
+      addHistory(final);
+      check(final);
+    }
+  };
+
+  recognition.onerror = ()=>startListening();
+}
+
+// 聞く
+function startListening(){
+  try{ recognition.start(); }catch(e){}
+}
+
+// 開始
+function start(){
+  chunks=splitText(document.getElementById("input").value);
+  index=0;
+  initVoice(); // ★ここ追加
+  initRecognition();
+  next();
+}
+
+// 次へ
+function next(){
+  if(index>=chunks.length){
+    document.getElementById("target").innerText="Finished!";
+    return;
+  }
+
+  document.getElementById("target").innerText=chunks[index];
+  document.getElementById("result").innerHTML="🎤 Speak now...";
+  speak(chunks[index]);
+}
+
+// ★強制NEXT
+function forceNext(){
+  index++;
+  next();
+}
+
+// 履歴
+function addHistory(text){
+  let div=document.createElement("div");
+  div.className="log";
+  div.innerText=text;
+  document.getElementById("history").prepend(div);
+}
+
+// 判定
+function check(user){
+  let target=chunks[index].toLowerCase().split(" ");
+  let input=user.toLowerCase().split(" ");
+
+  let html="", match=0;
+
+  target.forEach(word=>{
+    if(input.includes(word)){
+      html+="<span class='correct'>"+word+" </span>";
+      match++;
+    }else{
+      html+="<span class='wrong'>"+word+" </span>";
+    }
+  });
+
+  document.getElementById("target").innerHTML=html;
+
+  let score=match/target.length;
+
+  if(score>0.4){
+    index++;
+    setTimeout(next,800);
+  }else{
+    speak("Again");
+  }
+}
+</script>
+
+</body>
+</html>
