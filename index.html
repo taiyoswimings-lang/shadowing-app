@@ -40,22 +40,13 @@ button { padding:10px 20px; margin:10px; font-size:16px; }
 let chunks=[], index=0;
 let recognition;
 
-// ★音声安定用
-let selectedVoice = null;
-let voicesLoaded = false;
+// ===== 音声安定制御 =====
+let speaking = false;
+let retryCount = 0;
 
 // スピード表示
 document.getElementById("speed").oninput = function() {
   document.getElementById("speedVal").innerText = this.value;
-};
-
-// ★voiceロード待ち
-speechSynthesis.onvoiceschanged = function() {
-  const voices = speechSynthesis.getVoices();
-  selectedVoice = voices.find(v =>
-    v.name.includes("Google") || v.lang === "en-US"
-  );
-  voicesLoaded = true;
 };
 
 // 文分割
@@ -67,34 +58,46 @@ function splitText(text){
     .filter(s=>s.trim());
 }
 
-// ★音声（完全安定版）
+// ===== 強化版音声 =====
 function speak(text){
 
-  if(!voicesLoaded){
-    setTimeout(()=>speak(text), 200);
-    return;
+  speechSynthesis.cancel();
+  speaking = false;
+  retryCount = 0;
+
+  function trySpeak(){
+
+    const u = new SpeechSynthesisUtterance();
+    u.lang = "en-US";
+    u.text = text.replace(/AI/g, "A I");
+    u.rate = parseFloat(document.getElementById("speed").value);
+
+    u.onstart = () => {
+      speaking = true;
+    };
+
+    u.onend = () => {
+      speaking = false;
+      setTimeout(startListening, 200);
+    };
+
+    u.onerror = () => {
+      speaking = false;
+    };
+
+    speechSynthesis.speak(u);
+
+    // ★再生チェック＆リトライ
+    setTimeout(()=>{
+      if(!speaking && retryCount < 3){
+        retryCount++;
+        console.log("Retry:", retryCount);
+        trySpeak();
+      }
+    }, 700);
   }
 
-  speechSynthesis.cancel();
-
-  const u = new SpeechSynthesisUtterance();
-  u.lang = "en-US";
-
-  if(selectedVoice) u.voice = selectedVoice;
-
-  text = text.replace(/AI/g, "A I");
-  u.text = text;
-
-  u.rate = parseFloat(document.getElementById("speed").value);
-  u.pitch = 1;
-
-  u.onend = () => {
-    setTimeout(startListening, 200);
-  };
-
-  setTimeout(()=>{
-    speechSynthesis.speak(u);
-  }, 100);
+  trySpeak();
 }
 
 // 音声認識
@@ -136,7 +139,7 @@ function startListening(){
 
 // 開始
 function start(){
-  speechSynthesis.cancel(); // ★追加
+  speechSynthesis.cancel();
   chunks=splitText(document.getElementById("input").value);
   index=0;
   initRecognition();
