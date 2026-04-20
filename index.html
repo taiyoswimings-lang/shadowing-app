@@ -7,13 +7,13 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
   background: #f2f2f7;
-  text-align: center;
   margin: 0;
+  text-align: center;
 }
 
 h1 {
   font-size: 28px;
-  margin-top: 30px;
+  margin-top: 25px;
 }
 
 .subtitle {
@@ -22,15 +22,15 @@ h1 {
 }
 
 .container {
-  max-width: 800px;
+  max-width: 850px;
   margin: auto;
   padding: 20px;
 }
 
 .card {
   background: white;
-  padding: 20px;
   margin: 15px 0;
+  padding: 18px;
   border-radius: 18px;
   box-shadow: 0 10px 25px rgba(0,0,0,0.08);
   text-align: left;
@@ -40,19 +40,19 @@ textarea {
   width: 100%;
   height: 120px;
   font-size: 16px;
+  padding: 10px;
   border-radius: 12px;
   border: 1px solid #ddd;
-  padding: 10px;
 }
 
 button {
-  padding: 12px 20px;
+  padding: 12px 18px;
   margin: 8px;
-  font-size: 16px;
   border-radius: 12px;
   border: none;
   background: #007aff;
   color: white;
+  font-size: 16px;
   cursor: pointer;
 }
 
@@ -67,6 +67,7 @@ button:hover {
 
 #result {
   font-size: 18px;
+  margin-top: 5px;
 }
 
 .correct { color: #2ecc71; }
@@ -87,15 +88,17 @@ button:hover {
 
 <div class="container">
 
+<!-- 使い方 -->
 <div class="card guide">
 <b>使い方</b><br>
-1. 英文を貼り付ける<br>
-2. Startを押す<br>
-3. 音声を聞いてシャドーイング<br>
-4. 正しければ次へ進む<br>
-5. わからなければ「Again」で繰り返し
+① 英文を貼り付ける<br>
+② Startを押す<br>
+③ 音声を聞いてシャドーイング<br>
+④ 正しければ次へ進む<br>
+⑤ 難しければ「Again」で繰り返し
 </div>
 
+<!-- 入力 -->
 <div class="card">
 <textarea id="input" placeholder="Paste English text here"></textarea>
 
@@ -108,6 +111,7 @@ button:hover {
 <button onclick="forceNext()">Next ▶</button>
 </div>
 
+<!-- 表示 -->
 <div class="card">
 <div id="target">Press Start</div>
 <div id="result"></div>
@@ -119,31 +123,70 @@ button:hover {
 let chunks=[], index=0;
 let recognition;
 
-// ===== 音声（元の安定版）=====
-function speak(text){
-  speechSynthesis.cancel();
+// ===== 音声安定強化 =====
+let speaking = false;
+let retry = 0;
 
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-US";
-  u.rate = parseFloat(document.getElementById("speed").value);
-
-  u.onend = ()=>setTimeout(startListening,200);
-
-  speechSynthesis.speak(u);
-}
-
-// ===== 以下そのまま =====
-
+// スピード表示
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
+// 文分割
 function splitText(text){
   return text.replace(/\n/g," ")
     .split(/(?<=[.!?])/)
     .filter(s=>s.trim());
 }
 
+// ===== 安定版音声（出だし欠け対策込み）=====
+function speak(text){
+
+  speechSynthesis.cancel();
+
+  // ★ウォームアップ（出だし欠け対策）
+  const warm = new SpeechSynthesisUtterance(".");
+  warm.volume = 0;
+  speechSynthesis.speak(warm);
+
+  setTimeout(()=>{
+
+    speaking = false;
+    retry = 0;
+
+    function run(){
+
+      const u = new SpeechSynthesisUtterance();
+      u.lang = "en-US";
+      u.text = text.replace(/AI/g,"A I");
+      u.rate = parseFloat(document.getElementById("speed").value);
+
+      u.onstart = ()=> speaking = true;
+
+      u.onend = ()=> {
+        speaking = false;
+        setTimeout(startListening,200);
+      };
+
+      u.onerror = ()=> speaking = false;
+
+      speechSynthesis.speak(u);
+
+      // ★失敗時リトライ
+      setTimeout(()=>{
+        if(!speaking && retry < 2){
+          retry++;
+          run();
+        }
+      },700);
+    }
+
+    run();
+
+  },180);
+}
+
+// ===== 音声認識 =====
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -151,6 +194,7 @@ function initRecognition(){
 
   recognition.onresult = function(e){
     let final="";
+
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal){
         final += e.results[i][0].transcript;
@@ -158,7 +202,7 @@ function initRecognition(){
     }
 
     if(final){
-      document.getElementById("result").innerHTML = final;
+      document.getElementById("result").innerText = final;
       check(final);
     }
   };
@@ -170,16 +214,19 @@ function startListening(){
   try{ recognition.start(); }catch(e){}
 }
 
+// ===== 開始 =====
 function start(){
+  speechSynthesis.cancel();
   chunks = splitText(document.getElementById("input").value);
-  index=0;
+  index = 0;
   initRecognition();
   next();
 }
 
+// ===== 次 =====
 function next(){
-  if(index>=chunks.length){
-    document.getElementById("target").innerText="Finished!";
+  if(index >= chunks.length){
+    document.getElementById("target").innerText = "Finished!";
     return;
   }
 
@@ -187,25 +234,28 @@ function next(){
   speak(chunks[index]);
 }
 
+// ===== スキップ =====
 function forceNext(){
   index++;
   next();
 }
 
+// ===== 判定 =====
 function check(user){
+
   let target = chunks[index].toLowerCase().split(" ");
   let input = user.toLowerCase().split(" ");
 
-  let match=0;
+  let match = 0;
 
   target.forEach(w=>{
     if(input.includes(w)) match++;
   });
 
-  if(match/target.length > 0.4){
+  if(match / target.length > 0.4){
     index++;
     setTimeout(next,800);
-  } else {
+  }else{
     speak("Again");
   }
 }
