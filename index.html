@@ -2,6 +2,7 @@
 <html>
 <head>
 <title>Shadowing Trainer</title>
+
 <style>
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
@@ -17,7 +18,7 @@ h1 {
 
 .subtitle {
   color: #666;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .container {
@@ -29,9 +30,10 @@ h1 {
 .card {
   background: white;
   padding: 20px;
-  margin-top: 20px;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  margin: 15px 0;
+  border-radius: 18px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+  text-align: left;
 }
 
 textarea {
@@ -44,8 +46,8 @@ textarea {
 }
 
 button {
-  padding: 12px 24px;
-  margin: 10px;
+  padding: 12px 20px;
+  margin: 8px;
   font-size: 16px;
   border-radius: 12px;
   border: none;
@@ -60,34 +62,19 @@ button:hover {
 
 #target {
   font-size: 22px;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 }
 
 #result {
-  margin-top: 10px;
   font-size: 18px;
 }
 
 .correct { color: #2ecc71; }
-.wrong { color: #e74c3c; font-weight:bold; }
-
-#history {
-  margin-top: 20px;
-  text-align: left;
-  max-height: 200px;
-  overflow:auto;
-}
-
-.log {
-  border-bottom:1px solid #eee;
-  padding:8px;
-  font-size:14px;
-}
+.wrong { color: #e74c3c; font-weight: bold; }
 
 .guide {
-  text-align: left;
   font-size: 14px;
-  color: #555;
+  color: #444;
   line-height: 1.6;
 }
 </style>
@@ -102,18 +89,17 @@ button:hover {
 
 <div class="card guide">
 <b>使い方</b><br>
-① 英文を貼り付ける<br>
-② Startを押す<br>
-③ 音声を聞いてシャドーイング<br>
-④ 正しければ次へ、自信がなければ繰り返し<br>
-⑤ Nextボタンでスキップも可能
+1. 英文を貼り付ける<br>
+2. Startを押す<br>
+3. 音声を聞いてシャドーイング<br>
+4. 正しければ次へ進む<br>
+5. わからなければ「Again」で繰り返し
 </div>
 
 <div class="card">
-<textarea id="input" placeholder="Paste your English text here"></textarea>
+<textarea id="input" placeholder="Paste English text here"></textarea>
 
 <br>
-
 <label>Speed: <span id="speedVal">0.8</span></label><br>
 <input type="range" min="0.5" max="1.2" step="0.1" value="0.8" id="speed">
 
@@ -127,57 +113,35 @@ button:hover {
 <div id="result"></div>
 </div>
 
-<div class="card">
-<b>履歴</b>
-<div id="history"></div>
-</div>
-
 </div>
 
 <script>
 let chunks=[], index=0;
 let recognition;
 
-// ===== 音声（Google TTS）=====
-async function speak(text){
+// ===== 音声（元の安定版）=====
+function speak(text){
+  speechSynthesis.cancel();
 
-  const API_KEY = "ここにAPIキー";
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = parseFloat(document.getElementById("speed").value);
 
-  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
+  u.onend = ()=>setTimeout(startListening,200);
 
-  const body = {
-    input: { text: text },
-    voice: { languageCode: "en-US", name: "en-US-Wavenet-D" },
-    audioConfig: {
-      audioEncoding: "MP3",
-      speakingRate: parseFloat(document.getElementById("speed").value)
-    }
-  };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify(body)
-  });
-
-  const data = await res.json();
-
-  const audio = new Audio("data:audio/mp3;base64," + data.audioContent);
-
-  audio.onended = ()=>setTimeout(startListening,200);
-
-  audio.play();
+  speechSynthesis.speak(u);
 }
 
-// ===== 以下は既存そのまま =====
+// ===== 以下そのまま =====
 
-document.getElementById("speed").oninput = function() {
+document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
 function splitText(text){
-  return text.replace(/\n/g," ").replace(/,/g,".")
-    .split(/(?<=[.!?])/).filter(s=>s.trim());
+  return text.replace(/\n/g," ")
+    .split(/(?<=[.!?])/)
+    .filter(s=>s.trim());
 }
 
 function initRecognition(){
@@ -186,20 +150,15 @@ function initRecognition(){
   recognition.interimResults=true;
 
   recognition.onresult = function(e){
-    let interim="", final="";
+    let final="";
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal){
         final += e.results[i][0].transcript;
-      } else {
-        interim += e.results[i][0].transcript;
       }
     }
 
-    document.getElementById("result").innerHTML="<b>You:</b> "+interim;
-
     if(final){
-      document.getElementById("result").innerHTML="<b>You:</b> "+final;
-      addHistory(final);
+      document.getElementById("result").innerHTML = final;
       check(final);
     }
   };
@@ -212,7 +171,7 @@ function startListening(){
 }
 
 function start(){
-  chunks=splitText(document.getElementById("input").value);
+  chunks = splitText(document.getElementById("input").value);
   index=0;
   initRecognition();
   next();
@@ -223,8 +182,8 @@ function next(){
     document.getElementById("target").innerText="Finished!";
     return;
   }
-  document.getElementById("target").innerText=chunks[index];
-  document.getElementById("result").innerHTML="🎤 Speak now...";
+
+  document.getElementById("target").innerText = chunks[index];
   speak(chunks[index]);
 }
 
@@ -233,36 +192,20 @@ function forceNext(){
   next();
 }
 
-function addHistory(text){
-  let div=document.createElement("div");
-  div.className="log";
-  div.innerText=text;
-  document.getElementById("history").prepend(div);
-}
-
 function check(user){
-  let target=chunks[index].toLowerCase().split(" ");
-  let input=user.toLowerCase().split(" ");
+  let target = chunks[index].toLowerCase().split(" ");
+  let input = user.toLowerCase().split(" ");
 
-  let html="", match=0;
+  let match=0;
 
-  target.forEach(word=>{
-    if(input.includes(word)){
-      html+="<span class='correct'>"+word+" </span>";
-      match++;
-    }else{
-      html+="<span class='wrong'>"+word+" </span>";
-    }
+  target.forEach(w=>{
+    if(input.includes(w)) match++;
   });
 
-  document.getElementById("target").innerHTML=html;
-
-  let score=match/target.length;
-
-  if(score>0.4){
+  if(match/target.length > 0.4){
     index++;
     setTimeout(next,800);
-  }else{
+  } else {
     speak("Again");
   }
 }
