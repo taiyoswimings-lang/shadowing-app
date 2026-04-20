@@ -40,16 +40,13 @@ button { padding:10px 20px; margin:10px; font-size:16px; }
 let chunks=[], index=0;
 let recognition;
 
-// ===== 音声安定制御 =====
 let speaking = false;
 let retryCount = 0;
 
-// スピード表示
 document.getElementById("speed").oninput = function() {
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// 文分割
 function splitText(text){
   return text
     .replace(/\n/g, " ")
@@ -58,49 +55,57 @@ function splitText(text){
     .filter(s=>s.trim());
 }
 
-// ===== 強化版音声 =====
+// ★完全安定版（出だし欠け対策済み）
 function speak(text){
 
   speechSynthesis.cancel();
-  speaking = false;
-  retryCount = 0;
 
-  function trySpeak(){
+  // ウォームアップ（無音）
+  const warmup = new SpeechSynthesisUtterance(".");
+  warmup.volume = 0;
+  speechSynthesis.speak(warmup);
 
-    const u = new SpeechSynthesisUtterance();
-    u.lang = "en-US";
-    u.text = text.replace(/AI/g, "A I");
-    u.rate = parseFloat(document.getElementById("speed").value);
+  setTimeout(()=>{
 
-    u.onstart = () => {
-      speaking = true;
-    };
+    speaking = false;
+    retryCount = 0;
 
-    u.onend = () => {
-      speaking = false;
-      setTimeout(startListening, 200);
-    };
+    function trySpeak(){
 
-    u.onerror = () => {
-      speaking = false;
-    };
+      const u = new SpeechSynthesisUtterance();
+      u.lang = "en-US";
+      u.text = text.replace(/AI/g, "A I");
+      u.rate = parseFloat(document.getElementById("speed").value);
 
-    speechSynthesis.speak(u);
+      u.onstart = () => {
+        speaking = true;
+      };
 
-    // ★再生チェック＆リトライ
-    setTimeout(()=>{
-      if(!speaking && retryCount < 3){
-        retryCount++;
-        console.log("Retry:", retryCount);
-        trySpeak();
-      }
-    }, 700);
-  }
+      u.onend = () => {
+        speaking = false;
+        setTimeout(startListening, 200);
+      };
 
-  trySpeak();
+      u.onerror = () => {
+        speaking = false;
+      };
+
+      speechSynthesis.speak(u);
+
+      // 再生失敗時リトライ
+      setTimeout(()=>{
+        if(!speaking && retryCount < 3){
+          retryCount++;
+          trySpeak();
+        }
+      }, 700);
+    }
+
+    trySpeak();
+
+  }, 180); // ←ここがポイント（出だし安定）
 }
 
-// 音声認識
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -132,12 +137,10 @@ function initRecognition(){
   recognition.onerror = ()=>startListening();
 }
 
-// 聞く
 function startListening(){
   try{ recognition.start(); }catch(e){}
 }
 
-// 開始
 function start(){
   speechSynthesis.cancel();
   chunks=splitText(document.getElementById("input").value);
@@ -146,7 +149,6 @@ function start(){
   next();
 }
 
-// 次へ
 function next(){
   if(index>=chunks.length){
     document.getElementById("target").innerText="Finished!";
@@ -158,13 +160,11 @@ function next(){
   speak(chunks[index]);
 }
 
-// 強制NEXT
 function forceNext(){
   index++;
   next();
 }
 
-// 履歴
 function addHistory(text){
   let div=document.createElement("div");
   div.className="log";
@@ -172,7 +172,6 @@ function addHistory(text){
   document.getElementById("history").prepend(div);
 }
 
-// 判定
 function check(user){
   let target=chunks[index].toLowerCase().split(" ");
   let input=user.toLowerCase().split(" ");
