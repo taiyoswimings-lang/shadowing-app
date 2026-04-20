@@ -39,20 +39,24 @@ button { padding:10px 20px; margin:10px; font-size:16px; }
 <script>
 let chunks=[], index=0;
 let recognition;
-let selectedVoice=null;
+
+// ★音声安定用
+let selectedVoice = null;
+let voicesLoaded = false;
 
 // スピード表示
 document.getElementById("speed").oninput = function() {
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// ★音声初期化（固定化）
-function initVoice(){
-  let voices = speechSynthesis.getVoices();
-  selectedVoice = voices.find(v => 
-    v.name.includes("Google") || v.lang==="en-US"
+// ★voiceロード待ち
+speechSynthesis.onvoiceschanged = function() {
+  const voices = speechSynthesis.getVoices();
+  selectedVoice = voices.find(v =>
+    v.name.includes("Google") || v.lang === "en-US"
   );
-}
+  voicesLoaded = true;
+};
 
 // 文分割
 function splitText(text){
@@ -63,26 +67,37 @@ function splitText(text){
     .filter(s=>s.trim());
 }
 
-// 音声（改善版）
+// ★音声（完全安定版）
 function speak(text){
-  speechSynthesis.cancel(); // ★完全リセット
 
-  let u=new SpeechSynthesisUtterance();
-  u.lang="en-US";
+  if(!voicesLoaded){
+    setTimeout(()=>speak(text), 200);
+    return;
+  }
+
+  speechSynthesis.cancel();
+
+  const u = new SpeechSynthesisUtterance();
+  u.lang = "en-US";
 
   if(selectedVoice) u.voice = selectedVoice;
 
   text = text.replace(/AI/g, "A I");
   u.text = text;
 
-  u.rate=parseFloat(document.getElementById("speed").value);
+  u.rate = parseFloat(document.getElementById("speed").value);
+  u.pitch = 1;
 
-  u.onend=()=>startListening();
+  u.onend = () => {
+    setTimeout(startListening, 200);
+  };
 
-  speechSynthesis.speak(u);
+  setTimeout(()=>{
+    speechSynthesis.speak(u);
+  }, 100);
 }
 
-// 音声認識初期化
+// 音声認識
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -121,9 +136,9 @@ function startListening(){
 
 // 開始
 function start(){
+  speechSynthesis.cancel(); // ★追加
   chunks=splitText(document.getElementById("input").value);
   index=0;
-  initVoice(); // ★ここ追加
   initRecognition();
   next();
 }
@@ -140,7 +155,7 @@ function next(){
   speak(chunks[index]);
 }
 
-// ★強制NEXT
+// 強制NEXT
 function forceNext(){
   index++;
   next();
