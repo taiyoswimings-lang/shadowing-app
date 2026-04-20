@@ -3,24 +3,116 @@
 <head>
 <title>Shadowing Trainer</title>
 <style>
-body { font-family: Arial; background:#f5f7fa; text-align:center; }
-textarea { width:80%; height:100px; margin:10px; font-size:16px; }
-button { padding:10px 20px; margin:10px; font-size:16px; }
-#card { background:white; padding:20px; margin:20px auto; width:70%; border-radius:10px; box-shadow:0 5px 15px rgba(0,0,0,0.1);}
-.correct { color:green; }
-.wrong { color:red; font-weight:bold; }
-#target { font-size:22px; margin-bottom:15px; }
-#result { margin-top:10px; font-size:18px; }
-#history { margin-top:20px; text-align:left; max-height:200px; overflow:auto; }
-.log { border-bottom:1px solid #ddd; padding:5px; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+  background: #f2f2f7;
+  text-align: center;
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  margin-top: 30px;
+}
+
+.subtitle {
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: auto;
+  padding: 20px;
+}
+
+.card {
+  background: white;
+  padding: 20px;
+  margin-top: 20px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+}
+
+textarea {
+  width: 100%;
+  height: 120px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+button {
+  padding: 12px 24px;
+  margin: 10px;
+  font-size: 16px;
+  border-radius: 12px;
+  border: none;
+  background: #007aff;
+  color: white;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #005ecb;
+}
+
+#target {
+  font-size: 22px;
+  margin-bottom: 15px;
+}
+
+#result {
+  margin-top: 10px;
+  font-size: 18px;
+}
+
+.correct { color: #2ecc71; }
+.wrong { color: #e74c3c; font-weight:bold; }
+
+#history {
+  margin-top: 20px;
+  text-align: left;
+  max-height: 200px;
+  overflow:auto;
+}
+
+.log {
+  border-bottom:1px solid #eee;
+  padding:8px;
+  font-size:14px;
+}
+
+.guide {
+  text-align: left;
+  font-size: 14px;
+  color: #555;
+  line-height: 1.6;
+}
 </style>
 </head>
 
 <body>
 
-<h2>🎧 Shadowing Trainer</h2>
+<h1>大洋の特訓用自作アプリ</h1>
+<div class="subtitle">Shadowing Trainer</div>
 
-<textarea id="input" placeholder="Paste your English text here"></textarea><br>
+<div class="container">
+
+<div class="card guide">
+<b>使い方</b><br>
+① 英文を貼り付ける<br>
+② Startを押す<br>
+③ 音声を聞いてシャドーイング<br>
+④ 正しければ次へ、自信がなければ繰り返し<br>
+⑤ Nextボタンでスキップも可能
+</div>
+
+<div class="card">
+<textarea id="input" placeholder="Paste your English text here"></textarea>
+
+<br>
 
 <label>Speed: <span id="speedVal">0.8</span></label><br>
 <input type="range" min="0.5" max="1.2" step="0.1" value="0.8" id="speed">
@@ -28,82 +120,64 @@ button { padding:10px 20px; margin:10px; font-size:16px; }
 <br>
 <button onclick="start()">Start</button>
 <button onclick="forceNext()">Next ▶</button>
-
-<div id="card">
-  <div id="target">Press Start</div>
-  <div id="result"></div>
 </div>
 
+<div class="card">
+<div id="target">Press Start</div>
+<div id="result"></div>
+</div>
+
+<div class="card">
+<b>履歴</b>
 <div id="history"></div>
+</div>
+
+</div>
 
 <script>
 let chunks=[], index=0;
 let recognition;
 
-let speaking = false;
-let retryCount = 0;
+// ===== 音声（Google TTS）=====
+async function speak(text){
+
+  const API_KEY = "ここにAPIキー";
+
+  const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
+
+  const body = {
+    input: { text: text },
+    voice: { languageCode: "en-US", name: "en-US-Wavenet-D" },
+    audioConfig: {
+      audioEncoding: "MP3",
+      speakingRate: parseFloat(document.getElementById("speed").value)
+    }
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+
+  const audio = new Audio("data:audio/mp3;base64," + data.audioContent);
+
+  audio.onended = ()=>setTimeout(startListening,200);
+
+  audio.play();
+}
+
+// ===== 以下は既存そのまま =====
 
 document.getElementById("speed").oninput = function() {
   document.getElementById("speedVal").innerText = this.value;
 };
 
 function splitText(text){
-  return text
-    .replace(/\n/g, " ")
-    .replace(/,/g, ".")
-    .split(/(?<=[.!?])/)
-    .filter(s=>s.trim());
-}
-
-// ★完全安定版（出だし欠け対策済み）
-function speak(text){
-
-  speechSynthesis.cancel();
-
-  // ウォームアップ（無音）
-  const warmup = new SpeechSynthesisUtterance(".");
-  warmup.volume = 0;
-  speechSynthesis.speak(warmup);
-
-  setTimeout(()=>{
-
-    speaking = false;
-    retryCount = 0;
-
-    function trySpeak(){
-
-      const u = new SpeechSynthesisUtterance();
-      u.lang = "en-US";
-      u.text = text.replace(/AI/g, "A I");
-      u.rate = parseFloat(document.getElementById("speed").value);
-
-      u.onstart = () => {
-        speaking = true;
-      };
-
-      u.onend = () => {
-        speaking = false;
-        setTimeout(startListening, 200);
-      };
-
-      u.onerror = () => {
-        speaking = false;
-      };
-
-      speechSynthesis.speak(u);
-
-      // 再生失敗時リトライ
-      setTimeout(()=>{
-        if(!speaking && retryCount < 3){
-          retryCount++;
-          trySpeak();
-        }
-      }, 700);
-    }
-
-    trySpeak();
-
-  }, 180); // ←ここがポイント（出だし安定）
+  return text.replace(/\n/g," ").replace(/,/g,".")
+    .split(/(?<=[.!?])/).filter(s=>s.trim());
 }
 
 function initRecognition(){
@@ -113,7 +187,6 @@ function initRecognition(){
 
   recognition.onresult = function(e){
     let interim="", final="";
-
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal){
         final += e.results[i][0].transcript;
@@ -122,13 +195,10 @@ function initRecognition(){
       }
     }
 
-    document.getElementById("result").innerHTML =
-      "<b>You:</b> " + interim;
+    document.getElementById("result").innerHTML="<b>You:</b> "+interim;
 
     if(final){
-      document.getElementById("result").innerHTML =
-        "<b>You:</b> " + final;
-
+      document.getElementById("result").innerHTML="<b>You:</b> "+final;
       addHistory(final);
       check(final);
     }
@@ -142,7 +212,6 @@ function startListening(){
 }
 
 function start(){
-  speechSynthesis.cancel();
   chunks=splitText(document.getElementById("input").value);
   index=0;
   initRecognition();
@@ -154,7 +223,6 @@ function next(){
     document.getElementById("target").innerText="Finished!";
     return;
   }
-
   document.getElementById("target").innerText=chunks[index];
   document.getElementById("result").innerHTML="🎤 Speak now...";
   speak(chunks[index]);
