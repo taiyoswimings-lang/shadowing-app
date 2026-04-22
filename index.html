@@ -88,7 +88,6 @@ button:hover {
 
 <div class="container">
 
-<!-- 使い方 -->
 <div class="card guide">
 <b>使い方</b><br>
 ① 英文を貼り付ける<br>
@@ -98,7 +97,6 @@ button:hover {
 ⑤ 難しければ「Again」で繰り返し
 </div>
 
-<!-- 入力 -->
 <div class="card">
 <textarea id="input" placeholder="Paste English text here"></textarea>
 
@@ -111,7 +109,6 @@ button:hover {
 <button onclick="forceNext()">Next ▶</button>
 </div>
 
-<!-- 表示 -->
 <div class="card">
 <div id="target">Press Start</div>
 <div id="result"></div>
@@ -123,70 +120,33 @@ button:hover {
 let chunks=[], index=0;
 let recognition;
 
-// ===== 音声安定強化 =====
-let speaking = false;
-let retry = 0;
-
-// スピード表示
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// 文分割
+// ★① 改善：短く区切る
 function splitText(text){
-  return text.replace(/\n/g," ")
-    .split(/(?<=[.!?])/)
-    .filter(s=>s.trim());
+  return text
+    .replace(/\n/g," ")
+    .split(/(?<=[.!?])|,| and | but /i) // ←細かく分割
+    .map(s=>s.trim())
+    .filter(s=>s.length > 5 && s.length < 120); // ←長すぎ防止
 }
 
-// ===== 安定版音声（出だし欠け対策込み）=====
+// ★② 改善：一回だけ再生（リトライ削除）
 function speak(text){
 
   speechSynthesis.cancel();
 
-  // ★ウォームアップ（出だし欠け対策）
-  const warm = new SpeechSynthesisUtterance(".");
-  warm.volume = 0;
-  speechSynthesis.speak(warm);
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = "en-US";
+  u.rate = parseFloat(document.getElementById("speed").value);
 
-  setTimeout(()=>{
+  u.onend = ()=> setTimeout(startListening,200);
 
-    speaking = false;
-    retry = 0;
-
-    function run(){
-
-      const u = new SpeechSynthesisUtterance();
-      u.lang = "en-US";
-      u.text = text.replace(/AI/g,"A I");
-      u.rate = parseFloat(document.getElementById("speed").value);
-
-      u.onstart = ()=> speaking = true;
-
-      u.onend = ()=> {
-        speaking = false;
-        setTimeout(startListening,200);
-      };
-
-      u.onerror = ()=> speaking = false;
-
-      speechSynthesis.speak(u);
-
-      // ★失敗時リトライ
-      setTimeout(()=>{
-        if(!speaking && retry < 2){
-          retry++;
-          run();
-        }
-      },700);
-    }
-
-    run();
-
-  },180);
+  speechSynthesis.speak(u);
 }
 
-// ===== 音声認識 =====
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -214,7 +174,6 @@ function startListening(){
   try{ recognition.start(); }catch(e){}
 }
 
-// ===== 開始 =====
 function start(){
   speechSynthesis.cancel();
   chunks = splitText(document.getElementById("input").value);
@@ -223,7 +182,6 @@ function start(){
   next();
 }
 
-// ===== 次 =====
 function next(){
   if(index >= chunks.length){
     document.getElementById("target").innerText = "Finished!";
@@ -234,13 +192,11 @@ function next(){
   speak(chunks[index]);
 }
 
-// ===== スキップ =====
 function forceNext(){
   index++;
   next();
 }
 
-// ===== 判定 =====
 function check(user){
 
   let target = chunks[index].toLowerCase().split(" ");
