@@ -73,17 +73,17 @@ button:hover { background: #005ecb; }
 <b>使い方</b><br>
 ① 英文を貼り付ける<br>
 ② Startを押す<br>
-③ 音声を聞いてシャドーイング<br>
+③ 音声を聞きながら同時に発話（シャドーイング）<br>
 ④ 正しければ次へ進む<br>
-⑤ 難しければ「Again」で繰り返し
+⑤ 難しければ「Next」でスキップ
 </div>
 
 <div class="card">
 <textarea id="input" placeholder="Paste English text here"></textarea>
 
 <br>
-<label>Speed: <span id="speedVal">0.8</span></label><br>
-<input type="range" min="0.5" max="1.2" step="0.1" value="0.8" id="speed">
+<label>Speed: <span id="speedVal">0.9</span></label><br>
+<input type="range" min="0.6" max="1.2" step="0.1" value="0.9" id="speed">
 
 <br>
 <button onclick="start()">Start</button>
@@ -101,61 +101,22 @@ button:hover { background: #005ecb; }
 let chunks=[], index=0;
 let recognition;
 
-let bufferText = "";
-let silenceTimer = null;
+let bufferText="";
+let silenceTimer=null;
+let isSpeaking=false;
 
+// ===== スピード表示 =====
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
+// ===== 分割 =====
 function splitText(text){
   return text
     .replace(/\n/g," ")
     .split(/(?<=[.!?])|,| and | but /i)
     .map(s=>s.trim())
     .filter(s=>s.length > 5 && s.length < 120);
-}
-
-// ===== マイク制御 =====
-function stopListening(){
-  try{ recognition.stop(); }catch(e){}
-}
-
-function startListening(){
-  try{ recognition.start(); }catch(e){}
-}
-
-// ===== 音声 =====
-function speak(text){
-
-  // ★マイク停止（衝突防止）
-  stopListening();
-
-  // ★音声キュークリア
-  speechSynthesis.cancel();
-
-  setTimeout(()=>{
-
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US";
-    u.rate = parseFloat(document.getElementById("speed").value);
-
-    u.onend = ()=>{
-      setTimeout(startListening, 300); // ★少し余裕をもって再開
-    };
-
-    speechSynthesis.speak(u);
-
-  }, 300); // ★ここも重要（余裕を持たせる）
-}
-
-// ===== 初回アンロック =====
-function unlockAudio(){
-  return new Promise(resolve=>{
-    const dummy = new SpeechSynthesisUtterance(" ");
-    dummy.onend = resolve;
-    speechSynthesis.speak(dummy);
-  });
 }
 
 // ===== 音声認識 =====
@@ -174,7 +135,7 @@ function initRecognition(){
 
       if(e.results[i].isFinal){
         bufferText += " " + txt;
-      }else{
+      } else {
         interim += txt;
       }
     }
@@ -182,29 +143,60 @@ function initRecognition(){
     document.getElementById("result").innerText =
       (bufferText + " " + interim).trim();
 
+    // ★再生中は判定しない
+    if(isSpeaking) return;
+
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(()=>{
       if(bufferText.trim()){
         check(bufferText.trim());
-        bufferText = "";
+        bufferText="";
       }
     },1200);
   };
 
-  recognition.onerror = ()=>startListening();
+  recognition.onend = ()=> recognition.start();
+}
+
+// ===== 音声 =====
+function speak(text){
+
+  speechSynthesis.cancel();
+
+  setTimeout(()=>{
+
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US";
+    u.rate = parseFloat(document.getElementById("speed").value);
+
+    u.onstart = ()=> isSpeaking = true;
+    u.onend = ()=> isSpeaking = false;
+
+    speechSynthesis.speak(u);
+
+  },250); // ★ここで冒頭欠け防止
+}
+
+// ===== 初回解除 =====
+function unlockAudio(){
+  return new Promise(resolve=>{
+    const dummy = new SpeechSynthesisUtterance(" ");
+    dummy.onend = resolve;
+    speechSynthesis.speak(dummy);
+  });
 }
 
 // ===== 開始 =====
 async function start(){
 
   speechSynthesis.cancel();
-
   await unlockAudio();
 
   chunks = splitText(document.getElementById("input").value);
   index = 0;
 
   initRecognition();
+  recognition.start();
 
   next();
 }
@@ -240,8 +232,8 @@ function check(user){
 
   if(match / target.length > 0.4){
     index++;
-    setTimeout(next,800);
-  }else{
+    setTimeout(next,600);
+  } else {
     speak("Again");
   }
 }
