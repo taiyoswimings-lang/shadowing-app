@@ -1,102 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Shadowing Trainer</title>
-
-<style>
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
-  background: #f2f2f7;
-  margin: 0;
-  text-align: center;
-}
-
-h1 { font-size: 28px; margin-top: 25px; }
-.subtitle { color: #666; margin-bottom: 10px; }
-
-.container {
-  max-width: 850px;
-  margin: auto;
-  padding: 20px;
-}
-
-.card {
-  background: white;
-  margin: 15px 0;
-  padding: 18px;
-  border-radius: 18px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-  text-align: left;
-}
-
-textarea {
-  width: 100%;
-  height: 120px;
-  font-size: 16px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid #ddd;
-}
-
-button {
-  padding: 12px 18px;
-  margin: 8px;
-  border-radius: 12px;
-  border: none;
-  background: #007aff;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-button:hover { background: #005ecb; }
-
-#target { font-size: 22px; margin-bottom: 10px; }
-#result { font-size: 18px; margin-top: 5px; }
-
-.guide {
-  font-size: 14px;
-  color: #444;
-  line-height: 1.6;
-}
-</style>
-</head>
-
-<body>
-
-<h1>大洋の特訓用自作アプリ</h1>
-<div class="subtitle">Shadowing Trainer</div>
-
-<div class="container">
-
-<div class="card guide">
-<b>使い方</b><br>
-① 英文を貼り付ける<br>
-② Startを押す<br>
-③ 音声を聞いてシャドーイング<br>
-④ 正しければ次へ進む<br>
-⑤ 難しければ「Again」で繰り返し
-</div>
-
-<div class="card">
-<textarea id="input" placeholder="Paste English text here"></textarea>
-
-<br>
-<label>Speed: <span id="speedVal">0.8</span></label><br>
-<input type="range" min="0.5" max="1.2" step="0.1" value="0.8" id="speed">
-
-<br>
-<button onclick="start()">Start</button>
-<button onclick="forceNext()">Next ▶</button>
-</div>
-
-<div class="card">
-<div id="target">Press Start</div>
-<div id="result"></div>
-</div>
-
-</div>
-
 <script>
 let chunks=[], index=0;
 let recognition;
@@ -128,12 +29,15 @@ function speak(text){
   },200);
 }
 
+// ★ここを修正（Promise化）
 function unlockAudio(){
-  const dummy = new SpeechSynthesisUtterance(" ");
-  speechSynthesis.speak(dummy);
+  return new Promise(resolve=>{
+    const dummy = new SpeechSynthesisUtterance(" ");
+    dummy.onend = resolve;
+    speechSynthesis.speak(dummy);
+  });
 }
 
-// ★ここが改善ポイント
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -154,18 +58,16 @@ function initRecognition(){
       }
     }
 
-    // リアルタイム表示
     document.getElementById("result").innerText =
       (bufferText + " " + interim).trim();
 
-    // ★無音検知（ここが重要）
     clearTimeout(silenceTimer);
     silenceTimer = setTimeout(()=>{
       if(bufferText.trim()){
         check(bufferText.trim());
         bufferText = "";
       }
-    }, 1200); // ←ここで“余裕”を持たせる
+    },1200);
   };
 
   recognition.onerror = ()=>startListening();
@@ -175,15 +77,18 @@ function startListening(){
   try{ recognition.start(); }catch(e){}
 }
 
-function start(){
-  unlockAudio();
+// ★ここを修正（await）
+async function start(){
 
   speechSynthesis.cancel();
+
+  await unlockAudio(); // ←ここが超重要
+
   chunks = splitText(document.getElementById("input").value);
   index = 0;
   initRecognition();
 
-  setTimeout(()=> next(),200);
+  next();
 }
 
 function next(){
@@ -220,6 +125,3 @@ function check(user){
   }
 }
 </script>
-
-</body>
-</html>
