@@ -11,15 +11,8 @@ body {
   text-align: center;
 }
 
-h1 {
-  font-size: 28px;
-  margin-top: 25px;
-}
-
-.subtitle {
-  color: #666;
-  margin-bottom: 10px;
-}
+h1 { font-size: 28px; margin-top: 25px; }
+.subtitle { color: #666; margin-bottom: 10px; }
 
 .container {
   max-width: 850px;
@@ -56,22 +49,10 @@ button {
   cursor: pointer;
 }
 
-button:hover {
-  background: #005ecb;
-}
+button:hover { background: #005ecb; }
 
-#target {
-  font-size: 22px;
-  margin-bottom: 10px;
-}
-
-#result {
-  font-size: 18px;
-  margin-top: 5px;
-}
-
-.correct { color: #2ecc71; }
-.wrong { color: #e74c3c; font-weight: bold; }
+#target { font-size: 22px; margin-bottom: 10px; }
+#result { font-size: 18px; margin-top: 5px; }
 
 .guide {
   font-size: 14px;
@@ -124,27 +105,30 @@ document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// ★① 改善：短く区切る
 function splitText(text){
   return text
     .replace(/\n/g," ")
-    .split(/(?<=[.!?])|,| and | but /i) // ←細かく分割
+    .split(/(?<=[.!?])|,| and | but /i)
     .map(s=>s.trim())
-    .filter(s=>s.length > 5 && s.length < 120); // ←長すぎ防止
+    .filter(s=>s.length > 5 && s.length < 120);
 }
 
-// ★② 改善：一回だけ再生（リトライ削除）
 function speak(text){
-
   speechSynthesis.cancel();
 
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-US";
-  u.rate = parseFloat(document.getElementById("speed").value);
+  setTimeout(()=>{
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US";
+    u.rate = parseFloat(document.getElementById("speed").value);
+    u.onend = ()=> setTimeout(startListening,200);
+    speechSynthesis.speak(u);
+  }, 200);
+}
 
-  u.onend = ()=> setTimeout(startListening,200);
-
-  speechSynthesis.speak(u);
+// ★ここが修正ポイント
+function unlockAudio(){
+  const dummy = new SpeechSynthesisUtterance(" ");
+  speechSynthesis.speak(dummy);
 }
 
 function initRecognition(){
@@ -154,7 +138,6 @@ function initRecognition(){
 
   recognition.onresult = function(e){
     let final="";
-
     for(let i=0;i<e.results.length;i++){
       if(e.results[i].isFinal){
         final += e.results[i][0].transcript;
@@ -170,16 +153,15 @@ function initRecognition(){
   recognition.onerror = ()=>startListening();
 }
 
-function startListening(){
-  try{ recognition.start(); }catch(e){}
-}
-
 function start(){
+  unlockAudio(); // ★これを追加
+
   speechSynthesis.cancel();
   chunks = splitText(document.getElementById("input").value);
   index = 0;
   initRecognition();
-  next();
+
+  setTimeout(()=> next(), 200); // ★少し待つ
 }
 
 function next(){
@@ -197,8 +179,11 @@ function forceNext(){
   next();
 }
 
-function check(user){
+function startListening(){
+  try{ recognition.start(); }catch(e){}
+}
 
+function check(user){
   let target = chunks[index].toLowerCase().split(" ");
   let input = user.toLowerCase().split(" ");
 
