@@ -105,18 +105,32 @@ let bufferText="";
 let silenceTimer=null;
 let isSpeaking=false;
 
-// ===== スピード表示 =====
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// ===== 分割 =====
+// ===== 分割（改良版）=====
 function splitText(text){
-  return text
-    .replace(/\n/g," ")
-    .split(/(?<=[.!?])|,| and | but /i)
-    .map(s=>s.trim())
-    .filter(s=>s.length > 5 && s.length < 120);
+
+  text = text.replace(/\n/g," ");
+
+  let sentences = text.match(/[^.!?]+[.!?]?/g) || [];
+
+  let result = [];
+
+  sentences.forEach(s => {
+
+    let words = s.trim().split(" ");
+    let chunkSize = 10; // ←ここで長さ統一（8〜14にしたければ調整可）
+
+    for(let i=0;i<words.length;i+=chunkSize){
+      let part = words.slice(i, i+chunkSize).join(" ");
+      if(part.length > 5) result.push(part);
+    }
+
+  });
+
+  return result;
 }
 
 // ===== 音声認識 =====
@@ -143,7 +157,6 @@ function initRecognition(){
     document.getElementById("result").innerText =
       (bufferText + " " + interim).trim();
 
-    // ★再生中は判定しない
     if(isSpeaking) return;
 
     clearTimeout(silenceTimer);
@@ -174,7 +187,7 @@ function speak(text){
 
     speechSynthesis.speak(u);
 
-  },250); // ★ここで冒頭欠け防止
+  },250);
 }
 
 // ===== 初回解除 =====
@@ -232,7 +245,7 @@ function check(user){
 
   if(match / target.length > 0.4){
     index++;
-    setTimeout(next,600);
+    setTimeout(next,200); // ★ここ短縮
   } else {
     speak("Again");
   }
