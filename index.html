@@ -101,6 +101,9 @@ button:hover { background: #005ecb; }
 let chunks=[], index=0;
 let recognition;
 
+let bufferText = "";
+let silenceTimer = null;
+
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
@@ -122,46 +125,65 @@ function speak(text){
     u.rate = parseFloat(document.getElementById("speed").value);
     u.onend = ()=> setTimeout(startListening,200);
     speechSynthesis.speak(u);
-  }, 200);
+  },200);
 }
 
-// ★ここが修正ポイント
 function unlockAudio(){
   const dummy = new SpeechSynthesisUtterance(" ");
   speechSynthesis.speak(dummy);
 }
 
+// ★ここが改善ポイント
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
   recognition.interimResults=true;
+  recognition.continuous=true;
 
   recognition.onresult = function(e){
-    let final="";
-    for(let i=0;i<e.results.length;i++){
+
+    let interim="";
+
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      let txt = e.results[i][0].transcript;
+
       if(e.results[i].isFinal){
-        final += e.results[i][0].transcript;
+        bufferText += " " + txt;
+      }else{
+        interim += txt;
       }
     }
 
-    if(final){
-      document.getElementById("result").innerText = final;
-      check(final);
-    }
+    // リアルタイム表示
+    document.getElementById("result").innerText =
+      (bufferText + " " + interim).trim();
+
+    // ★無音検知（ここが重要）
+    clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(()=>{
+      if(bufferText.trim()){
+        check(bufferText.trim());
+        bufferText = "";
+      }
+    }, 1200); // ←ここで“余裕”を持たせる
   };
 
   recognition.onerror = ()=>startListening();
 }
 
+function startListening(){
+  try{ recognition.start(); }catch(e){}
+}
+
 function start(){
-  unlockAudio(); // ★これを追加
+  unlockAudio();
 
   speechSynthesis.cancel();
   chunks = splitText(document.getElementById("input").value);
   index = 0;
   initRecognition();
 
-  setTimeout(()=> next(), 200); // ★少し待つ
+  setTimeout(()=> next(),200);
 }
 
 function next(){
@@ -179,11 +201,8 @@ function forceNext(){
   next();
 }
 
-function startListening(){
-  try{ recognition.start(); }catch(e){}
-}
-
 function check(user){
+
   let target = chunks[index].toLowerCase().split(" ");
   let input = user.toLowerCase().split(" ");
 
