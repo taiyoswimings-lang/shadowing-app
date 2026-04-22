@@ -116,19 +116,40 @@ function splitText(text){
     .filter(s=>s.length > 5 && s.length < 120);
 }
 
+// ===== マイク制御 =====
+function stopListening(){
+  try{ recognition.stop(); }catch(e){}
+}
+
+function startListening(){
+  try{ recognition.start(); }catch(e){}
+}
+
+// ===== 音声 =====
 function speak(text){
+
+  // ★マイク停止（衝突防止）
+  stopListening();
+
+  // ★音声キュークリア
   speechSynthesis.cancel();
 
   setTimeout(()=>{
+
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "en-US";
     u.rate = parseFloat(document.getElementById("speed").value);
-    u.onend = ()=> setTimeout(startListening,200);
+
+    u.onend = ()=>{
+      setTimeout(startListening, 300); // ★少し余裕をもって再開
+    };
+
     speechSynthesis.speak(u);
-  },200);
+
+  }, 300); // ★ここも重要（余裕を持たせる）
 }
 
-// ★ここ修正済み（待機あり）
+// ===== 初回アンロック =====
 function unlockAudio(){
   return new Promise(resolve=>{
     const dummy = new SpeechSynthesisUtterance(" ");
@@ -137,6 +158,7 @@ function unlockAudio(){
   });
 }
 
+// ===== 音声認識 =====
 function initRecognition(){
   recognition = new webkitSpeechRecognition();
   recognition.lang="en-US";
@@ -172,24 +194,22 @@ function initRecognition(){
   recognition.onerror = ()=>startListening();
 }
 
-function startListening(){
-  try{ recognition.start(); }catch(e){}
-}
-
-// ★ここも修正済み
+// ===== 開始 =====
 async function start(){
 
   speechSynthesis.cancel();
 
-  await unlockAudio(); // ←これが効く
+  await unlockAudio();
 
   chunks = splitText(document.getElementById("input").value);
   index = 0;
+
   initRecognition();
 
   next();
 }
 
+// ===== 次 =====
 function next(){
   if(index >= chunks.length){
     document.getElementById("target").innerText = "Finished!";
@@ -200,11 +220,13 @@ function next(){
   speak(chunks[index]);
 }
 
+// ===== スキップ =====
 function forceNext(){
   index++;
   next();
 }
 
+// ===== 判定 =====
 function check(user){
 
   let target = chunks[index].toLowerCase().split(" ");
