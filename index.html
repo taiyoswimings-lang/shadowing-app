@@ -49,8 +49,6 @@ button {
   cursor: pointer;
 }
 
-button:hover { background: #005ecb; }
-
 #target { font-size: 22px; margin-bottom: 10px; }
 #result { font-size: 18px; margin-top: 5px; }
 
@@ -79,7 +77,7 @@ button:hover { background: #005ecb; }
 </div>
 
 <div class="card">
-<textarea id="input" placeholder="Paste English text here"></textarea>
+<textarea id="input"></textarea>
 
 <br>
 <label>Speed: <span id="speedVal">0.9</span></label><br>
@@ -104,33 +102,51 @@ let recognition;
 let bufferText="";
 let silenceTimer=null;
 let isSpeaking=false;
+let selectedVoice=null;
 
+// ===== 音声取得（iPad対策）=====
+function loadVoices(){
+  let voices = speechSynthesis.getVoices();
+
+  // 自然な英語音声を優先
+  selectedVoice = voices.find(v => v.lang === "en-US" && v.name.includes("Samantha"))
+    || voices.find(v => v.lang === "en-US")
+    || voices[0];
+}
+
+speechSynthesis.onvoiceschanged = loadVoices;
+
+// ===== スピード表示 =====
 document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// ===== 分割（改良版）=====
+// ===== 分割（自然版）=====
 function splitText(text){
 
   text = text.replace(/\n/g," ");
 
-  let sentences = text.match(/[^.!?]+[.!?]?/g) || [];
-
+  let parts = text.split(/([,.!?])/);
   let result = [];
+  let buffer = "";
 
-  sentences.forEach(s => {
+  for(let i=0;i<parts.length;i+=2){
+    let sentence = (parts[i] || "") + (parts[i+1] || "");
 
-    let words = s.trim().split(" ");
-    let chunkSize = 10; // ←ここで長さ統一（8〜14にしたければ調整可）
-
-    for(let i=0;i<words.length;i+=chunkSize){
-      let part = words.slice(i, i+chunkSize).join(" ");
-      if(part.length > 5) result.push(part);
+    if(sentence.trim().length < 20){
+      buffer += " " + sentence;
+    } else {
+      if(buffer){
+        result.push(buffer.trim());
+        buffer = "";
+      }
+      result.push(sentence.trim());
     }
+  }
 
-  });
+  if(buffer) result.push(buffer.trim());
 
-  return result;
+  return result.filter(s => s.length > 5);
 }
 
 // ===== 音声認識 =====
@@ -179,8 +195,9 @@ function speak(text){
   setTimeout(()=>{
 
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "en-US";
+    u.voice = selectedVoice;
     u.rate = parseFloat(document.getElementById("speed").value);
+    u.pitch = 1.05;
 
     u.onstart = ()=> isSpeaking = true;
     u.onend = ()=> isSpeaking = false;
@@ -204,6 +221,7 @@ async function start(){
 
   speechSynthesis.cancel();
   await unlockAudio();
+  loadVoices();
 
   chunks = splitText(document.getElementById("input").value);
   index = 0;
@@ -245,7 +263,7 @@ function check(user){
 
   if(match / target.length > 0.4){
     index++;
-    setTimeout(next,200); // ★ここ短縮
+    setTimeout(next,200);
   } else {
     speak("Again");
   }
