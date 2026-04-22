@@ -104,16 +104,14 @@ let silenceTimer=null;
 let isSpeaking=false;
 let selectedVoice=null;
 
-// ===== 音声取得（iPad対策）=====
+// ===== 音声取得 =====
 function loadVoices(){
   let voices = speechSynthesis.getVoices();
 
-  // 自然な英語音声を優先
   selectedVoice = voices.find(v => v.lang === "en-US" && v.name.includes("Samantha"))
     || voices.find(v => v.lang === "en-US")
     || voices[0];
 }
-
 speechSynthesis.onvoiceschanged = loadVoices;
 
 // ===== スピード表示 =====
@@ -121,26 +119,39 @@ document.getElementById("speed").oninput = function(){
   document.getElementById("speedVal").innerText = this.value;
 };
 
-// ===== 分割（自然版）=====
+// ===== 分割（修正版）=====
 function splitText(text){
 
   text = text.replace(/\n/g," ");
 
-  let parts = text.split(/([,.!?])/);
+  let raw = text.split(/([,.!?])/);
   let result = [];
   let buffer = "";
 
-  for(let i=0;i<parts.length;i+=2){
-    let sentence = (parts[i] || "") + (parts[i+1] || "");
+  for(let i=0;i<raw.length;i+=2){
 
-    if(sentence.trim().length < 20){
-      buffer += " " + sentence;
+    let sentence = (raw[i] || "");
+    let punct = raw[i+1] || "";
+
+    let combined = sentence + punct;
+
+    // ★コンマ特別処理
+    if(punct === ","){
+      let nextPart = raw[i+2] || "";
+      if(nextPart.trim().length <= 5){
+        buffer += " " + combined;
+        continue;
+      }
+    }
+
+    if(combined.trim().length < 20){
+      buffer += " " + combined;
     } else {
       if(buffer){
         result.push(buffer.trim());
-        buffer = "";
+        buffer="";
       }
-      result.push(sentence.trim());
+      result.push(combined.trim());
     }
   }
 
@@ -181,7 +192,7 @@ function initRecognition(){
         check(bufferText.trim());
         bufferText="";
       }
-    },1200);
+    },700); // ★短縮
   };
 
   recognition.onend = ()=> recognition.start();
